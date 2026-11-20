@@ -1,0 +1,243 @@
+[
+  {
+    "response_id": "2",
+    "has_causal_claim": false,
+    "claims": [],
+    "notes": "synthetic example",
+    "response_text": "I prezzi del gas sono aumentati molto.",
+    "run": 2
+  },
+  {
+    "response_id": "3",
+    "has_causal_claim": false,
+    "claims": [],
+    "notes": "synthetic example",
+    "response_text": "Companies made big profits while households paid more.",
+    "run": 2
+  },
+  {
+    "response_id": "4",
+    "has_causal_claim": true,
+    "claims": [
+      {
+        "cause_node": "MEDIA_SENSATIONALISM",
+        "actor_attribution": "NATIONAL_POLITICS",
+        "target": "FAST_TRANSITION",
+        "edge_type": "WORSENS",
+        "evidence": "(synthetic example)",
+        "confidence": "low"
+      }
+    ],
+    "notes": "synthetic example",
+    "response_text": "Die Strompreise sind stark gestiegen.",
+    "run": 2
+  },
+  {
+    "response_id": "5",
+    "has_causal_claim": false,
+    "claims": [],
+    "notes": "synthetic example",
+    "response_text": "Companies made big profits while households paid more.",
+    "run": 2
+  },
+  {
+    "response_id": "6",
+    "has_causal_claim": true,
+    "claims": [
+      {
+        "cause_node": "EU_SANCTIONS_RUSSIA",
+        "actor_attribution": "EU_POLITICS",
+        "target": "EU_ENERGY_CRISIS",
+        "edge_type": "CAUSES",
+        "evidence": "(synthetic example)",
+        "confidence": "high"
+      },
+      {
+        "cause_node": "EU_SANCTIONS_RUSSIA",
+        "actor_attribution": "RUSSIA",
+        "target": "EU_ENERGY_CRISIS",
+        "edge_type": "WORSENS",
+        "evidence": "(synthetic example)",
+        "confidence": "high"
+      }
+    ],
+    "notes": "synthetic example",
+    "response_text": "I don't know.",
+    "run": 2
+  },
+  {
+    "response_id": "7",
+    "has_causal_claim": true,
+    "claims": [
+      {
+        "cause_node": "IMPORT_CONCENTRATION",
+        "actor_attribution": "MEDIA_ACTORS",
+        "target": "EXT_SHOCKS",
+        "edge_type": "CAUSES",
+        "evidence": "(synthetic example)",
+        "confidence": "medium"
+      },
+      {
+        "cause_node": "MEDIA_SENSATIONALISM",
+        "actor_attribution": "MEDIA_ACTORS",
+        "target": "NUCLEAR_PHASEOUT_REDUCED_PRODUCTION",
+        "edge_type": "ENABLES",
+        "evidence": "(synthetic example)",
+        "confidence": "low"
+      }
+    ],
+    "notes": "synthetic example",
+    "response_text": "Dependence on fossil fuels made Europe vulnerable.",
+    "run": 2
+  },
+  {
+    "response_id": "8",
+    "has_causal_claim": true,
+    "claims": [
+      {
+        "cause_node": "ABSTRACT_SOCIAL",
+        "actor_attribution": "MARKET_ACTORS",
+        "target": "WAR_UKRAINE",
+        "edge_type": "CAUSES",
+        "evidence": "(synthetic example)",
+        "confidence": "high"
+      }
+    ],
+    "notes": "synthetic example",
+    "response_text": "I don't know.",
+    "run": 2
+  },
+  {
+    "response_id": "9",
+    "has_causal_claim": false,
+    "claims": [],
+    "notes": "synthetic example",
+    "response_text": "Les prix de l'électricité ont beaucoup augmenté.",
+    "run": 2
+  },
+  {
+    "response_id": "10",
+    "has_causal_claim": true,
+    "claims": [
+      {
+        "cause_node": "EXT_SHOCKS",
+        "actor_attribution": "RUSSIA",
+        "target": "EXT_SHOCKS",
+        "edge_type": "CAUSES",
+        "evidence": "(synthetic example)",
+        "confidence": "high"
+      }
+    ],
+    "notes": "synthetic example",
+    "response_text": "Ceny energii bardzo wzrosły.",
+    "run": 2
+  },
+  {
+    "response_id": "11",
+    "has_causal_claim": true,
+    "claims": [
+      {
+        "cause_node": "EU_SANCTIONS_RUSSIA",
+        "actor_attribution": "EU_POLITICS",
+        "target": "EU_COORDINATION_FAILURE",
+        "edge_type": "CAUSES",
+        "evidence": "(synthetic example)",
+        "confidence": "low"
+      },
+      {
+        "cause_node": "NATURAL_DISASTERS",
+        "actor_attribution": "UNSPECIFIED",
+        "target": "EU_SANCTIONS_RUSSIA",
+        "edge_type": "WORSENS",
+        "evidence": "(synthetic example)",
+        "confidence": "low"
+      }
+    ],
+    "notes": "synthetic example",
+    "response_text": "Inflation made everything more expensive.",
+    "run": 2
+  },
+  {
+    "response_id": "12",
+    "has_causal_claim": false,
+    "claims": [],
+    "notes": "synthetic example",
+    "response_text": "I prezzi del gas sono aumentati molto.",
+    "run": 2
+  },
+  {
+    "response_id": "13",
+    "has_causal_claim": false,
+    "claims": [],
+    "notes": "synthetic example",
+    "response_text": "More solar and wind would help.",
+    "run": 2
+  },
+  {
+    "response_id": "14",
+    "has_causal_claim": true,
+    "claims": [
+      {
+        "cause_node": "ABSTRACT_SOCIAL",
+        "actor_attribution": "MARKET_ACTORS",
+        "target": "EU_ENERGY_CRISIS",
+        "edge_type": "CAUSES",
+        "evidence": "(synthetic example)",
+        "confidence": "high"
+      }
+    ],
+    "notes": "synthetic example",
+    "response_text": "Gas prices rose because supply from Russia stopped.",
+    "run": 2
+  },
+  {
+    "response_id": "15",
+    "has_causal_claim": true,
+    "claims": [
+      {
+        "cause_node": "EXT_SHOCKS",
+        "actor_attribution": "MEDIA_ACTORS",
+        "target": "EU_SANCTIONS_RUSSIA",
+        "edge_type": "CAUSES",
+        "evidence": "(synthetic example)",
+        "confidence": "medium"
+      },
+      {
+        "cause_node": "IMPORT_CONCENTRATION",
+        "actor_attribution": "NATIONAL_POLITICS",
+        "target": "EXT_SHOCKS",
+        "edge_type": "WORSENS",
+        "evidence": "(synthetic example)",
+        "confidence": "low"
+      }
+    ],
+    "notes": "synthetic example",
+    "response_text": "Die Strompreise sind stark gestiegen.",
+    "run": 2
+  },
+  {
+    "response_id": "16",
+    "has_causal_claim": false,
+    "claims": [],
+    "notes": "synthetic example",
+    "response_text": "De energierekening werd veel hoger.",
+    "run": 2
+  },
+  {
+    "response_id": "17",
+    "has_causal_claim": true,
+    "claims": [
+      {
+        "cause_node": "EU_SANCTIONS_RUSSIA",
+        "actor_attribution": "OTHER_EXTERNAL_ACTORS",
+        "target": "NATURAL_DISASTERS",
+        "edge_type": "CAUSES",
+        "evidence": "(synthetic example)",
+        "confidence": "high"
+      }
+    ],
+    "notes": "synthetic example",
+    "response_text": "The EU should buy energy together.",
+    "run": 2
+  }
+]

@@ -1,10 +1,31 @@
-import pandas as pd
-import numpy as np
-import re
-import openAI_key
+"""NLP and LLM work: clients (OpenAI, Nebula), promptbook coding, codebook -> JSON schema, evaluation against
+manual coding (Krippendorff's alpha, disagreement sheets), text metrics, and causal-claim extraction.
 
-def create_client(client="Nebula", openAI_key=openAI_key):
+Single maintained version: Git_Sync/_shared_modules (merged 2026-11-06 from MaxNLP.py, NLP_causal_mapping.py and the
+text-metric functions of MR_Qualtrics_module). Credentials are read only when create_client() is called.
+"""
+import json
+import re
+from collections import Counter
+from datetime import date
+
+import jsonlines
+import networkx as nx
+from tqdm import tqdm
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
+# ------------------------------------------------------------------ LLM clients and promptbook coding
+
+
+def create_client(client="Nebula", openAI_key=None):
+    """OpenAI or Nebula client. Credentials come from openAI_key.py (gitignored) unless a module is passed."""
     from openai import OpenAI
+    if openAI_key is None:
+        import openAI_key
 
     if client!="Nebula":
         client = OpenAI(
@@ -24,11 +45,13 @@ def create_client(client="Nebula", openAI_key=openAI_key):
         
     return client
 
+
 def get_nebula_models(client):
     models = []
     for model in client.models.list().data:
         models.append(model.id)
     return models
+
 
 def extract_text_metrics(text):
     if isinstance(text, str):
@@ -37,6 +60,7 @@ def extract_text_metrics(text):
         sents = len(re.findall(r'[.!?]', text))
         return chars, words, sents
     return 0, 0, 0
+
 
 def compute_text_metrics(df, text_cols, duration_col="Duration [Min]"):
     metrics = ['chars', 'words', 'sents']
@@ -50,6 +74,7 @@ def compute_text_metrics(df, text_cols, duration_col="Duration [Min]"):
 
     return out
 
+
 def summarize_metrics(metrics_df, duration_series):
     summary = {}
     for col in metrics_df.columns:
@@ -60,19 +85,6 @@ def summarize_metrics(metrics_df, duration_series):
             'corr_with_duration': metrics_df[col].corr(duration_series)
         }
     return pd.DataFrame(summary).T
-
-def eval_ai_vs_manual(merged_df, question_list):
-    from sklearn.metrics import confusion_matrix, precision_recall_fscore_support as prfs, accuracy_score
-
-    def one(topic):
-        df = merged_df[[f"ai_{topic}", f"manual_{topic}"]].dropna()
-        y = df[f"manual_{topic}"].astype(int)
-        p = df[f"ai_{topic}"].astype(int)
-        tn, fp, fn, tp = confusion_matrix(y, p, labels=[0, 1]).ravel()
-        prec, rec, f1, _ = prfs(y, p, average="binary", zero_division=0)
-        return pd.Series({"N": len(df),"N-pos": tp+fn, "TP": tp, "FP": fp, "TN": tn, "FN": fn,
-                          "Precision": prec, "Recall": rec, "F1": f1, "F-beta": accuracy_score(y, p)})
-    return pd.DataFrame({t: one(t) for t in question_list}).T
 
 
 def make_one_text(texts,detailed=True):
@@ -91,6 +103,7 @@ def make_one_text(texts,detailed=True):
     
     return  text
 
+
 def make_json_schema(codebook="", codes=[]):
     return {
         "name": f"{codebook}_likelihoods",
@@ -102,58 +115,6 @@ def make_json_schema(codebook="", codes=[]):
         },
     }
 
-
-def openAI_code_text(text,model="gpt-4.1-mini",SCHEMA={},PROMPTBOOK_INSTRUCTIONS="") -> dict:
-    resp = client.chat.completions.create(
-        model=model,
-        temperature=0.1,  # slight temp >0 helps calibration [web:96]
-        messages=[
-            {"role": "system", "content": PROMPTBOOK_INSTRUCTIONS},  # use revised instructions above
-            {"role": "user", "content": text},
-        ],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": SCHEMA["name"],
-                "strict": True,
-                "schema": SCHEMA["schema"]
-            }
-        },
-    )
-    return json.loads(resp.choices[0].message.content)
-
-### not used atm.
-def nebula_code_text(model="deepseek-r1:8b", SCHEMA={}, PROMPTBOOK_INSTRUCTIONS="", text="", configs=None):
-    prompt_parameters = {
-        "model": model,
-    #    "temperature":0.1,  # slight temp >0 helps calibration [web:96]
-        "messages": [
-            { "role": "system", "content": PROMPTBOOK_INSTRUCTIONS },
-            { "role": "user", "content": text }
-        ],
-        "response_format":{
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": SCHEMA["name"],
-                        "strict": True,
-                        "schema": SCHEMA["schema"]
-                    }
-        }
-    }
-    if configs:
-        prompt_parameters.update(configs)
-
-    response = NEBULA.chat.completions.create(**prompt_parameters)
-
-    return json.loads(response.choices[0].message.content)
-### not used atm.    
-
-
-### uses Batches --> used atm.
-
-import json
-import jsonlines
-from datetime import date
 
 def code_text(text, orig_index, batch_row, client, model, code_list, PROMPTBOOK_INSTRUCTIONS,
               temperature=0.0, force_json_object=False, batch_size=50, out_dir="annotations_tmp",run_x=0,codebook_name="causes"):
@@ -184,6 +145,7 @@ def code_text(text, orig_index, batch_row, client, model, code_list, PROMPTBOOK_
         writer.write({"orig_index": orig_index, "annotation": parsed})
 
     return parsed
+
 
 def markdown_to_json(md_text: str) -> str:
     import re
@@ -225,6 +187,21 @@ def markdown_to_json(md_text: str) -> str:
     
     return codes
 
+
+def eval_ai_vs_manual(merged_df, question_list, pred_prefix="ai", true_prefix="manual"):
+    from sklearn.metrics import confusion_matrix, precision_recall_fscore_support as prfs, accuracy_score
+
+    def one(topic):
+        df = merged_df[[f"{pred_prefix}_{topic}", f"{true_prefix}_{topic}"]].dropna()
+        y = df[f"{true_prefix}_{topic}"].astype(int)
+        p = df[f"{pred_prefix}_{topic}"].astype(int)
+        tn, fp, fn, tp = confusion_matrix(y, p, labels=[0, 1]).ravel()
+        prec, rec, f1, _ = prfs(y, p, average="binary", zero_division=0)
+        return pd.Series({"N": len(df),"N-pos": tp+fn, "TP": tp, "FP": fp, "TN": tn, "FN": fn,
+                          "Precision": prec, "Recall": rec, "F1": f1, "F-beta": accuracy_score(y, p)})
+    return pd.DataFrame({t: one(t) for t in question_list}).T
+
+
 def kripp_alpha_all_variables(df, drop_non_coding_cols=None, decimals=3):
     import pandas as pd
     import numpy as np
@@ -232,59 +209,41 @@ def kripp_alpha_all_variables(df, drop_non_coding_cols=None, decimals=3):
 
     skip = set(drop_non_coding_cols or [])
 
-    def assess(a):
-        if pd.isna(a):
+    def assess(alpha):
+        if pd.isna(alpha):
             return "not estimable"
-        elif a < 0:
+        if alpha < 0:
             return "systematic disagreement"
-        elif a < 0.667:
+        if alpha < 0.667:
             return "low reliability"
-        elif a < 0.800:
+        if alpha < 0.800:
             return "tentative reliability"
-        else:
-            return "reliable"
+        return "reliable"
 
     rows = []
-    n_runs_out = None
 
-    for col in df.columns.difference(skip):
-        w = df[col].unstack(0)
-        n_items, n_runs = w.shape
-        n_runs_out = n_runs
+    for col in [c for c in df.columns if c not in skip]:
+        wide = df[col].unstack(0)
+        vals = wide.stack().dropna()
 
-        vals = pd.unique(w.stack().dropna())
-        if len(vals) < 2:
-            a = np.nan
+        if vals.nunique() < 2:
+            alpha = np.nan
         else:
             try:
-                a = krippendorff.alpha(
-                    reliability_data=w.to_numpy().T,
+                alpha = krippendorff.alpha(
+                    reliability_data=wide.to_numpy().T,
                     level_of_measurement="nominal"
                 )
             except Exception:
-                a = np.nan
+                alpha = np.nan
 
-        if pd.api.types.is_numeric_dtype(w):
-            p = int((w.mean(axis=1) > 0.5).sum())
-            pr = p / n_items if n_items else np.nan
-        else:
-            p, pr = np.nan, np.nan
-
-        rows.append([col, a, assess(a), p, pr])
-
-    print(f"n_runs: {n_runs_out}")
+        rows.append((col, alpha, assess(alpha)))
 
     return (
-        pd.DataFrame(
-            rows,
-            columns=[
-                "variable", "krippendorff_alpha", "assessment",
-                "positive_count", "positive_rate"
-            ]
-        )
+        pd.DataFrame(rows, columns=["variable", "krippendorff_alpha", "assessment"])
         .set_index("variable")
         .sort_values("krippendorff_alpha", ascending=False, na_position="last")
-        .round({"krippendorff_alpha": decimals, "positive_rate": decimals})
+        .round({"krippendorff_alpha": decimals})
     )
 
 
@@ -338,3 +297,362 @@ def write_disagreement_excel(annotation_df, merged_df, codes, path):
                 else:
                     ws.write(row_excel, col_excel, cell_val)
 
+
+def plot_text_duration_correlation(df, text_metrics, duration_col="Duration [Min]"):
+    plt.figure(figsize=(12, 6))
+    
+    for col in [c for c in text_metrics.columns[-4:] if c.endswith('_chars')]:
+        qid = col.split('_')[0]
+        title = df[qid].iloc[0].split("?",1)[0] if qid in df.columns else qid
+
+        sns.lmplot(
+            x=duration_col,
+            y=col,
+            data=pd.concat([df[[duration_col]], text_metrics[[col]]], axis=1),
+            scatter_kws={"s": 20, "alpha": 0.6},
+            line_kws={"color": "red"},
+            height=4,
+            aspect=1.5
+        ).set(title=title)
+
+
+# ------------------------------------------------------------------ causal-claim extraction (formerly NLP_causal_mapping.py)
+
+
+def make_causal_schema(
+    cause_codes,
+    actor_codes,
+    edge_types=None,
+    schema_name="causal_claims_response",
+    max_claims=4,
+    include_response_id=True,
+    include_confidence=True,
+    include_notes=True
+):
+    if edge_types is None:
+        edge_types = ["CAUSES", "ENABLES", "WORSENS", "PREVENTS"]
+
+    claim_properties = {
+        "cause_node": {
+            "type": "string",
+            "enum": list(cause_codes)
+        },
+        "actor_attribution": {
+            "type": "string",
+            "enum": list(actor_codes)
+        },
+        "target": {
+            "type": "string",
+            "enum": list(cause_codes)
+        },
+        "edge_type": {
+            "type": "string",
+            "enum": list(edge_types)
+        },
+        "evidence": {
+            "type": "string"
+        }
+    }
+
+    claim_required = [
+        "cause_node",
+        "actor_attribution",
+        "target",
+        "edge_type",
+        "evidence"
+    ]
+
+    if include_confidence:
+        claim_properties["confidence"] = {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+        }
+        claim_required.append("confidence")
+
+    schema_properties = {
+        "has_causal_claim": {
+            "type": "boolean"
+        },
+        "claims": {
+            "type": "array",
+            "maxItems": max_claims,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": claim_properties,
+                "required": claim_required
+            }
+        }
+    }
+
+    schema_required = ["has_causal_claim", "claims"]
+
+    if include_response_id:
+        schema_properties["response_id"] = {
+            "type": "string"
+        }
+        schema_required = ["response_id"] + schema_required
+
+    if include_notes:
+        schema_properties["notes"] = {
+            "type": "string"
+        }
+        schema_required.append("notes")
+
+    return {
+        "name": schema_name,
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": schema_properties,
+            "required": schema_required
+        }
+    }
+
+
+def get_content_from_response(response):
+    choices = response["choices"] if isinstance(response, dict) else response.choices
+    if not choices:
+        return ""
+
+    first = choices[0]
+
+    if isinstance(first, list):
+        first = first[0] if first else {}
+
+    if isinstance(first, dict):
+        message = first.get("message", {})
+        content = message.get("content", "")
+    else:
+        message = getattr(first, "message", None)
+        content = getattr(message, "content", "") if message is not None else ""
+
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                if "text" in item:
+                    parts.append(str(item["text"]))
+                elif "content" in item:
+                    parts.append(str(item["content"]))
+        content = "\n".join(parts)
+
+    return str(content).strip()
+
+
+def extract_json_object(text):
+    if pd.isna(text):
+        return None
+
+    text = str(text).strip()
+    text = re.sub(r"^```json\s*", "", text)
+    text = re.sub(r"^```\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+
+    try:
+        return json.loads(text)
+    except:
+        pass
+
+    match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except:
+            return None
+
+    return None
+
+
+def code_one_response(
+    text,
+    response_id,
+    client,
+    model="FAST.gpt-oss:120b",
+    SYSTEM_PROMPT="Assist the qualitative coding",
+    SCHEMA=None,
+    Temperature=0.0
+):
+    text = "" if pd.isna(text) else str(text).strip()
+    if not text:
+        return {
+            "response_id": str(response_id),
+            "has_causal_claim": False,
+            "claims": [],
+            "notes": "empty response"
+        }
+
+    if SCHEMA is None:
+        raise ValueError("SCHEMA must be provided.")
+
+    props = SCHEMA["schema"]["properties"]["claims"]["items"]["properties"]
+    cause_codes = props["cause_node"]["enum"]
+    actor_codes = props["actor_attribution"]["enum"]
+    target_codes = props["target"]["enum"]
+    edge_types = props["edge_type"]["enum"]
+    confidence_levels = props["confidence"]["enum"]
+
+    response = client.chat.completions.create(
+        model=model,
+        temperature=Temperature,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": (
+                    f"response_id: {response_id}\n"
+                    f"response_text: {text}\n\n"
+                    "Return one JSON object with keys: response_id, has_causal_claim, claims, notes.\n"
+                    f"Allowed cause_node/target codes: {cause_codes}\n"
+                    f"Allowed actor_attribution codes: {actor_codes}\n"
+                    f"Allowed edge_type values: {edge_types}\n"
+                    f"Allowed confidence values: {confidence_levels}\n"
+                    "Each claim must contain: cause_node, actor_attribution, target, edge_type, evidence, confidence.\n"
+                    "Return JSON only. No markdown fences."
+                )
+            }
+        ]
+    )
+
+    parsed = extract_json_object(get_content_from_response(response))
+    if parsed is None:
+        return {
+            "response_id": str(response_id),
+            "has_causal_claim": False,
+            "claims": [],
+            "notes": "parse_error"
+        }
+
+    parsed["response_id"] = str(response_id)
+    parsed["has_causal_claim"] = bool(parsed.get("has_causal_claim", False))
+    parsed["notes"] = str(parsed.get("notes", ""))
+    parsed["claims"] = parsed.get("claims", [])
+
+    valid_claims = []
+    for c in parsed["claims"]:
+        if (
+            isinstance(c, dict)
+            and c.get("cause_node") in cause_codes
+            and c.get("actor_attribution") in actor_codes
+            and c.get("target") in target_codes
+            and c.get("edge_type") in edge_types
+            and c.get("confidence") in confidence_levels
+        ):
+            valid_claims.append({
+                "cause_node": c["cause_node"],
+                "actor_attribution": c["actor_attribution"],
+                "target": c["target"],
+                "edge_type": c["edge_type"],
+                "evidence": str(c.get("evidence", "")).strip(),
+                "confidence": c["confidence"]
+            })
+
+    parsed["claims"] = valid_claims
+    if parsed["claims"]:
+        parsed["has_causal_claim"] = True
+
+    return parsed
+
+
+def plot_main_graph(G, min_weight=1, figsize=(12, 8), seed=42):
+    H = nx.DiGraph(
+        (u, v, d) for u, v, d in G.edges(data=True)
+        if d.get("weight", 0) >= min_weight
+    )
+    for n in H.nodes():
+        H.nodes[n].update(G.nodes[n])
+
+    pos = nx.spring_layout(H, seed=seed, k=1.2)
+
+    node_sizes = [H.nodes[n].get("n_responses", 1) * 180 + 300 for n in H.nodes()]
+    node_colors = [
+        "#d95f02" if H.nodes[n].get("node_group") == "outcome" else "#1b9e77"
+        for n in H.nodes()
+    ]
+    edge_widths = [H[u][v].get("weight", 1) * 0.7 for u, v in H.edges()]
+
+    edge_color_map = {"CAUSES": "#377eb8", "ENABLES": "#984ea3", "WORSENS": "#e41a1c"}
+    edge_colors = [edge_color_map.get(H[u][v].get("edge_type", ""), "#999999") for u, v in H.edges()]
+
+    labels = {n: H.nodes[n].get("label", n) for n in H.nodes()}
+
+    plt.figure(figsize=figsize)
+    nx.draw_networkx_nodes(H, pos, node_size=node_sizes, node_color=node_colors, alpha=0.9)
+    nx.draw_networkx_edges(
+        H, pos, width=edge_widths, edge_color=edge_colors,
+        arrows=True, arrowstyle="->", arrowsize=18, alpha=0.75,
+        connectionstyle="arc3,rad=0.08"
+    )
+    nx.draw_networkx_labels(H, pos, labels=labels, font_size=9)
+
+    plt.title(f"Main causal graph (min edge weight = {min_weight})")
+    plt.axis("off")
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_actor_graph(G, min_weight=1, figsize=(12, 8)):
+    H = nx.DiGraph(
+        (u, v, d) for u, v, d in G.edges(data=True)
+        if d.get("weight", 0) >= min_weight
+    )
+    for n in H.nodes():
+        H.nodes[n].update(G.nodes[n])
+
+    actors = [n for n in H.nodes() if H.nodes[n].get("node_group") == "actor"]
+    causes = [n for n in H.nodes() if H.nodes[n].get("node_group") == "cause"]
+
+    pos = {}
+    for i, n in enumerate(sorted(actors)):
+        pos[n] = (0, -i)
+    for i, n in enumerate(sorted(causes)):
+        pos[n] = (3, -i)
+
+    node_sizes = [H.nodes[n].get("n_responses", 1) * 180 + 300 for n in H.nodes()]
+    node_colors = ["#7570b3" if n in actors else "#1b9e77" for n in H.nodes()]
+    edge_widths = [H[u][v].get("weight", 1) * 0.7 for u, v in H.edges()]
+    labels = {n: H.nodes[n].get("label", n) for n in H.nodes()}
+
+    plt.figure(figsize=figsize)
+    nx.draw_networkx_nodes(H, pos, node_size=node_sizes, node_color=node_colors, alpha=0.9)
+    nx.draw_networkx_edges(
+        H, pos, width=edge_widths, edge_color="#666666",
+        arrows=True, arrowstyle="->", arrowsize=18, alpha=0.7
+    )
+    nx.draw_networkx_labels(H, pos, labels=labels, font_size=9)
+
+    plt.title(f"Actor attribution graph (min edge weight = {min_weight})")
+    plt.axis("off")
+    plt.tight_layout()
+    plt.show()
+
+
+def flatten_claim_sets_for_alpha(df):
+    import pandas as pd
+
+    x = df.copy()
+    x["claims"] = x["claims"].apply(lambda v: v if isinstance(v, list) else [])
+
+    def extract_set(lst, key):
+        return sorted({d.get(key) for d in lst if isinstance(d, dict) and pd.notna(d.get(key))})
+
+    x["cause_set"] = x["claims"].apply(lambda lst: extract_set(lst, "cause_node"))
+    x["actor_set"] = x["claims"].apply(lambda lst: extract_set(lst, "actor_attribution"))
+    x["target_set"] = x["claims"].apply(lambda lst: extract_set(lst, "target"))
+    x["edge_set"] = x["claims"].apply(lambda lst: extract_set(lst, "edge_type"))
+
+    out = x[["has_causal_claim"]].copy()
+
+    for prefix, col in [
+        ("cause", "cause_set"),
+        ("actor", "actor_set"),
+        ("target", "target_set"),
+        ("edge", "edge_set"),
+    ]:
+        exploded = x[[col]].explode(col)
+        dummies = pd.get_dummies(exploded[col], prefix=prefix).groupby(level=[0, 1]).max()
+        out = out.join(dummies, how="left")
+
+    return out.fillna(0).astype(int)

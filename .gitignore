@@ -1,0 +1,20 @@
+# --- credentials (never commit) ---
+openAI_key.py
+qualtrics_key.py
+*.env
+.env*
+!*.example.*
+# --- python / jupyter ---
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+# --- original (non-shared) data and results ---
+data/
+results/
+MANUAL CODING/
+*.pkl
+*.npy
+output/
+# dummy data is always shared
+!dummy_data/
+!dummy_data/**
